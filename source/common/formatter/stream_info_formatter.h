@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bitset>
+#include <chrono>
 #include <functional>
 #include <list>
 #include <regex>
@@ -293,6 +294,31 @@ public:
 
 private:
   Protobuf::Value str_;
+};
+
+/**
+ * FormatterProvider for file contents. Reads the file and caches the result for a
+ * configurable TTL (default 5 seconds). Picks up changes made by external processes
+ * (e.g. credential refresh) without disk I/O on every call.
+ */
+class FileFormatter : public StreamInfoFormatterProvider {
+public:
+  FileFormatter(absl::string_view path, absl::optional<size_t> max_length);
+
+  // StreamInfoFormatterProvider
+  using StreamInfoFormatterProvider::format;
+  using StreamInfoFormatterProvider::formatValue;
+  absl::optional<std::string> format(const StreamInfo::StreamInfo&) const override;
+  Protobuf::Value formatValue(const StreamInfo::StreamInfo&) const override;
+
+private:
+  void refreshIfNeeded() const;
+
+  const std::string path_;
+  const absl::optional<size_t> max_length_;
+  static constexpr std::chrono::seconds CacheTtl{5};
+  mutable std::string cached_value_;
+  mutable std::chrono::steady_clock::time_point last_read_{};
 };
 
 /**

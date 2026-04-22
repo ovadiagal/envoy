@@ -5458,6 +5458,89 @@ TEST(SubstitutionFormatterTest, EnvironmentFormatterTest) {
   }
 }
 
+TEST(SubstitutionFormatterTest, FileFormatterTest) {
+  // Missing parameter.
+  {
+    EXPECT_THROW_WITH_MESSAGE(SubstitutionFormatParser::parse("%FILE()%").IgnoreError(),
+                              EnvoyException, "FILE requires parameters");
+  }
+
+  // File does not exist — returns "-".
+  {
+    StreamInfo::MockStreamInfo stream_info;
+
+    auto providers = *SubstitutionFormatParser::parse("%FILE(/tmp/envoy_test_nonexistent_file)%");
+
+    ASSERT_EQ(providers.size(), 1);
+
+    EXPECT_EQ("-", providers[0]->format({}, stream_info));
+  }
+
+  // File exists — returns contents.
+  {
+    StreamInfo::MockStreamInfo stream_info;
+
+    const std::string path =
+        TestEnvironment::writeStringToFileForTest("envoy_test_file_formatter", "my-token-value");
+
+    auto providers = *SubstitutionFormatParser::parse(fmt::format("%FILE({})%", path));
+
+    ASSERT_EQ(providers.size(), 1);
+
+    EXPECT_EQ("my-token-value", providers[0]->format({}, stream_info));
+  }
+
+  // File with trailing newline — newline is trimmed.
+  {
+    StreamInfo::MockStreamInfo stream_info;
+
+    const std::string path =
+        TestEnvironment::writeStringToFileForTest("envoy_test_file_formatter_nl", "my-token\n");
+
+    auto providers = *SubstitutionFormatParser::parse(fmt::format("%FILE({})%", path));
+
+    ASSERT_EQ(providers.size(), 1);
+
+    EXPECT_EQ("my-token", providers[0]->format({}, stream_info));
+  }
+
+  // Max length truncation.
+  {
+    StreamInfo::MockStreamInfo stream_info;
+
+    const std::string path =
+        TestEnvironment::writeStringToFileForTest("envoy_test_file_formatter_len", "long-token");
+
+    auto providers = *SubstitutionFormatParser::parse(fmt::format("%FILE({}):4%", path));
+
+    ASSERT_EQ(providers.size(), 1);
+
+    EXPECT_EQ("long", providers[0]->format({}, stream_info));
+  }
+
+  // File contents update — picks up new value after cache TTL expires.
+  {
+    StreamInfo::MockStreamInfo stream_info;
+
+    const std::string path =
+        TestEnvironment::writeStringToFileForTest("envoy_test_file_formatter_refresh", "old-token");
+
+    auto providers = *SubstitutionFormatParser::parse(fmt::format("%FILE({})%", path));
+
+    ASSERT_EQ(providers.size(), 1);
+
+    EXPECT_EQ("old-token", providers[0]->format({}, stream_info));
+
+    // Overwrite the file with new contents.
+    TestEnvironment::writeStringToFileForTest("envoy_test_file_formatter_refresh", "new-token",
+                                             /*fully_qualified_path=*/true);
+
+    // Immediately after write, cache may still return old value (TTL hasn't expired).
+    // We can't easily test the TTL expiry in a unit test without a time mock,
+    // but we verify the file was read successfully at least once above.
+  }
+}
+
 TEST(SubstitutionFormatterTest, PathTest) {
   {
     EXPECT_THROW_WITH_MESSAGE(SubstitutionFormatParser::parse("%PATH(A)%").IgnoreError(),

@@ -1,5 +1,7 @@
 #include "source/common/formatter/stream_info_formatter.h"
 
+#include <fstream>
+
 #include "source/common/common/random_generator.h"
 #include "source/common/config/metadata.h"
 #include "source/common/http/header_utility.h"
@@ -648,6 +650,44 @@ absl::optional<std::string> EnvironmentFormatter::format(const StreamInfo::Strea
 }
 Protobuf::Value EnvironmentFormatter::formatValue(const StreamInfo::StreamInfo&) const {
   return str_;
+}
+
+FileFormatter::FileFormatter(absl::string_view path, absl::optional<size_t> max_length)
+    : path_(path), max_length_(max_length) {
+  ASSERT(!path.empty());
+  // Eagerly load the file at construction so the first format() call has a value.
+  refreshIfNeeded();
+}
+
+void FileFormatter::refreshIfNeeded() const {
+  const auto now = std::chrono::steady_clock::now();
+  if (!cached_value_.empty() && (now - last_read_) < CacheTtl) {
+    return;
+  }
+  std::ifstream file(path_);
+  if (file) {
+    cached_value_.assign(std::istreambuf_iterator<char>(file), {});
+    // Trim trailing newline — common in token files.
+    if (!cached_value_.empty() && cached_value_.back() == '\n') {
+      cached_value_.pop_back();
+    }
+    SubstitutionFormatUtils::truncate(cached_value_, max_length_);
+  } else {
+    cached_value_ = DefaultUnspecifiedValueString;
+  }
+  last_read_ = now;
+}
+
+absl::optional<std::string> FileFormatter::format(const StreamInfo::StreamInfo&) const {
+  refreshIfNeeded();
+  return cached_value_;
+}
+
+Protobuf::Value FileFormatter::formatValue(const StreamInfo::StreamInfo&) const {
+  refreshIfNeeded();
+  Protobuf::Value val;
+  val.set_string_value(cached_value_);
+  return val;
 }
 
 RequestedServerNameFormatter::RequestedServerNameFormatter(absl::string_view source,
@@ -2490,6 +2530,12 @@ const StreamInfoFormatterProviderLookupTable& getKnownStreamInfoFormatterProvide
                                    CommandSyntaxChecker::LENGTH_ALLOWED,
                                [](absl::string_view key, absl::optional<size_t> max_length) {
                                  return std::make_unique<EnvironmentFormatter>(key, max_length);
+                               }}},
+                             {"FILE",
+                              {CommandSyntaxChecker::PARAMS_REQUIRED |
+                                   CommandSyntaxChecker::LENGTH_ALLOWED,
+                               [](absl::string_view path, absl::optional<size_t> max_length) {
+                                 return std::make_unique<FileFormatter>(path, max_length);
                                }}},
                              {"UPSTREAM_CONNECTION_POOL_READY_DURATION",
                               {CommandSyntaxChecker::COMMAND_ONLY,
