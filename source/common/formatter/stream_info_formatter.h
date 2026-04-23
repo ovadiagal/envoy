@@ -297,27 +297,27 @@ private:
 };
 
 /**
- * FormatterProvider for file contents. Reads the file and caches the result for a
- * configurable TTL (default 5 seconds). Picks up changes made by external processes
- * (e.g. credential refresh) without disk I/O on every call.
+ * FormatterProvider for file contents. 
+ * Reads the file and caches the result for 5 seconds to prevent excessive disk I/O.
  */
 class FileFormatter : public StreamInfoFormatterProvider {
 public:
   FileFormatter(absl::string_view path, absl::optional<size_t> max_length);
 
   // StreamInfoFormatterProvider
+  // Don't hide the other structure of format and formatValue.
   using StreamInfoFormatterProvider::format;
   using StreamInfoFormatterProvider::formatValue;
   absl::optional<std::string> format(const StreamInfo::StreamInfo&) const override;
   Protobuf::Value formatValue(const StreamInfo::StreamInfo&) const override;
 
 private:
-  void refreshIfNeeded() const;
+  void maybeReloadFile() const;
 
   const std::string path_;
   const absl::optional<size_t> max_length_;
   static constexpr std::chrono::seconds CacheTtl{5};
-  mutable std::string cached_value_;
+  mutable Protobuf::Value str_;
   mutable std::chrono::steady_clock::time_point last_read_{};
 };
 
