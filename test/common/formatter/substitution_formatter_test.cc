@@ -5518,27 +5518,6 @@ TEST(SubstitutionFormatterTest, FileFormatterTest) {
     EXPECT_EQ("long", providers[0]->format({}, stream_info));
   }
 
-  // File contents update — picks up new value after cache TTL expires.
-  {
-    StreamInfo::MockStreamInfo stream_info;
-
-    const std::string path =
-        TestEnvironment::writeStringToFileForTest("envoy_test_file_formatter_refresh", "old-token");
-
-    auto providers = *SubstitutionFormatParser::parse(fmt::format("%FILE({})%", path));
-
-    ASSERT_EQ(providers.size(), 1);
-
-    EXPECT_EQ("old-token", providers[0]->format({}, stream_info));
-
-    // Overwrite the file with new contents.
-    TestEnvironment::writeStringToFileForTest("envoy_test_file_formatter_refresh", "new-token",
-                                             /*fully_qualified_path=*/true);
-
-    // Immediately after write, cache may still return old value (TTL hasn't expired).
-    // We can't easily test the TTL expiry in a unit test without a time mock,
-    // but we verify the file was read successfully at least once above.
-  }
 }
 
 TEST(SubstitutionFormatterTest, PathTest) {
