@@ -26,17 +26,8 @@ DynamicModuleUdpListenerFilterConfigFactory::createFilterFactoryFromProto(
 
   auto dynamic_module = std::move(dynamic_module_or_error.value());
 
-  std::string filter_config_bytes;
-  if (proto_config.has_filter_config()) {
-    auto config_or_error = MessageUtil::anyToBytes(proto_config.filter_config());
-    if (!config_or_error.ok()) {
-      throw EnvoyException(std::string(config_or_error.status().message()));
-    }
-    filter_config_bytes = std::move(config_or_error.value());
-  }
-
   auto filter_config = std::make_shared<DynamicModuleUdpListenerFilterConfig>(
-      proto_config, std::move(filter_config_bytes), std::move(dynamic_module), context.scope());
+      proto_config, std::move(dynamic_module), context.scope());
 
   // When the runtime guard is enabled, register the metrics namespace as a custom stat namespace.
   // This causes the namespace prefix to be stripped from prometheus output and no envoy_ prefix

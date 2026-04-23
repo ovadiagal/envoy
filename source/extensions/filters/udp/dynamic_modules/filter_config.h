@@ -24,8 +24,7 @@ public:
   DynamicModuleUdpListenerFilterConfig(
       const envoy::extensions::filters::udp::dynamic_modules::v3::DynamicModuleUdpListenerFilter&
           config,
-      std::string filter_config, Extensions::DynamicModules::DynamicModulePtr dynamic_module,
-      Stats::Scope& stats_scope);
+      Extensions::DynamicModules::DynamicModulePtr dynamic_module, Stats::Scope& stats_scope);
 
   ~DynamicModuleUdpListenerFilterConfig();
 
